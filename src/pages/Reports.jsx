@@ -1,8 +1,5 @@
-const db = globalThis.__B44_DB__ || {
-  auth: { isAuthenticated: async () => false, me: async () => null },
-  entities: new Proxy({}, { get: () => ({ filter: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), delete: async () => ({}) }) }),
-  integrations: { Core: { UploadFile: async () => ({ file_url: '' }) } }
-};
+import { db } from "../firebase";
+import { collection, getDocs, addDoc, query, orderBy, limit, doc, deleteDoc, updateDoc } from "firebase/firestore";
 
 import { useState, useEffect } from "react";
 
@@ -19,10 +16,22 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    db.entities.Task.list("-entry_date", 1000).then(data => {
-      setTasks(data);
+const fetchTasks = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "tasks"));
+      const taskData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTasks(taskData);
+    } catch (error) {
+      console.error("Error fetching tasks: ", error);
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  fetchTasks();
   }, []);
 
   // Monthly created vs completed

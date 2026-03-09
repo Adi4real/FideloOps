@@ -1,8 +1,5 @@
-const db = globalThis.__B44_DB__ || {
-  auth: { isAuthenticated: async () => false, me: async () => null },
-  entities: new Proxy({}, { get: () => ({ filter: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), delete: async () => ({}) }) }),
-  integrations: { Core: { UploadFile: async () => ({ file_url: '' }) } }
-};
+import { db } from "../firebase";
+import { collection, getDocs, addDoc, query, orderBy, limit, doc, deleteDoc, updateDoc } from "firebase/firestore";
 
 import { useState, useEffect } from "react";
 
@@ -23,15 +20,22 @@ export default function Clients() {
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
-    Promise.all([
-      db.entities.Client.list("client_name", 1000),
-      db.entities.Task.list("-entry_date", 1000),
-    ]).then(([c, t]) => {
-      setClients(c);
-      setTasks(t);
+const load = async () => {
+    setLoading(true);
+    try {
+      // Fetch both collections simultaneously
+      const [clientSnap, taskSnap] = await Promise.all([
+        getDocs(query(collection(db, "clients"), orderBy("client_name"))),
+        getDocs(query(collection(db, "tasks"), orderBy("entry_date", "desc")))
+      ]);
+
+      setClients(clientSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setTasks(taskSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      console.error("Error loading client data:", error);
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -46,13 +50,16 @@ export default function Clients() {
 
   const clientTasks = selected ? tasks.filter(t => t.client_code === selected.client_code) : [];
 
-  const handleDelete = async (client) => {
+const handleDelete = async (client) => {
     if (!window.confirm(`Delete "${client.client_name}" permanently? This cannot be undone.`)) return;
-    await db.entities.Client.delete(client.id);
-    if (selected?.id === client.id) setSelected(null);
-    load();
+    try {
+      await deleteDoc(doc(db, "clients", client.id));
+      if (selected?.id === client.id) setSelected(null);
+      load();
+    } catch (error) {
+      console.error("Error deleting client:", error);
+    }
   };
-
   const handleSave = async (data) => {
     if (data.id) {
       await db.entities.Client.update(data.id, data);

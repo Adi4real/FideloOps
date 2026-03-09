@@ -1,11 +1,5 @@
 import { db } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
-
-const db = globalThis.__B44_DB__ || {
-  auth: { isAuthenticated: async () => false, me: async () => null },
-  entities: new Proxy({}, { get: () => ({ filter: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), delete: async () => ({}) }) }),
-  integrations: { Core: { UploadFile: async () => ({ file_url: '' }) } }
-};
+import { collection, getDocs, addDoc, query, orderBy, limit, doc, deleteDoc, updateDoc } from "firebase/firestore";
 
 import { useState, useEffect } from "react";
 
@@ -27,11 +21,23 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    db.entities.Task.list("-entry_date", 500).then(data => {
-      setTasks(data);
-      setLoading(false);
-    });
+useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        // Fetches all tasks from Firebase, ordered by entry date
+        const q = query(collection(db, "tasks"), orderBy("entry_date", "desc"));
+        const querySnapshot = await getDocs(q);
+        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        setTasks(data);
+      } catch (error) {
+        console.error("Error loading dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
   }, []);
 
   const active = tasks.filter(t => !["Completed", "Cancelled"].includes(t.status));

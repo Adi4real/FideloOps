@@ -1,8 +1,5 @@
-const db = globalThis.__B44_DB__ || {
-  auth: { isAuthenticated: async () => false, me: async () => null },
-  entities: new Proxy({}, { get: () => ({ filter: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), delete: async () => ({}) }) }),
-  integrations: { Core: { UploadFile: async () => ({ file_url: '' }) } }
-};
+import { db } from "../firebase";
+import { collection, getDocs, addDoc, query, orderBy, limit, doc, deleteDoc, updateDoc } from "firebase/firestore";
 
 import { useState, useEffect } from "react";
 
@@ -23,35 +20,62 @@ export default function LiveTasks() {
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterAssigned, setFilterAssigned] = useState("all");
 
-  const loadTasks = () => {
-    setLoading(true);
-    db.entities.Task.list("-follow_up_date", 500).then(data => {
-      setTasks(data);
-      setLoading(false);
-    });
-  };
+const loadTasks = async () => {
+  setLoading(true);
+  try {
+    // Fetches tasks from Firebase, ordered by follow_up_date descending
+    const tasksQuery = query(collection(db, "tasks"), orderBy("follow_up_date", "desc"));
+    const querySnapshot = await getDocs(tasksQuery);
+    
+    const taskData = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    setTasks(taskData);
+  } catch (error) {
+    console.error("Error fetching tasks:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { loadTasks(); }, []);
 
   const handleStatusChange = async (task, newStatus) => {
-    const update = { status: newStatus };
-    if (newStatus === "Completed") {
-      update.closure_date = format(new Date(), "yyyy-MM-dd");
-    }
-    await db.entities.Task.update(task.id, update);
-    loadTasks();
-  };
+  try {
+    const taskRef = doc(db, "tasks", task.id);
+    const updateData = { status: newStatus };
 
-  const handleNotesUpdate = async (task, reviewer_notes) => {
-    await db.entities.Task.update(task.id, { reviewer_notes });
-    loadTasks();
+    if (newStatus === "Completed") {
+      updateData.closure_date = format(new Date(), "yyyy-MM-dd");
+    }
+
+    await updateDoc(taskRef, updateData);
+    loadTasks(); // Refresh the list after update
+  } catch (error) {
+    console.error("Error updating status:", error);
+  }
+};
+
+const handleNotesUpdate = async (task, reviewer_notes) => {
+    try {
+      await updateDoc(doc(db, "tasks", task.id), { reviewer_notes });
+      loadTasks();
+    } catch (error) {
+      console.error("Error updating notes:", error);
+    }
   };
 
   const handleDelete = async (task) => {
-    await db.entities.Task.delete(task.id);
-    loadTasks();
+    if (!window.confirm("Delete this task?")) return;
+    try {
+      await deleteDoc(doc(db, "tasks", task.id));
+      loadTasks();
+    } catch (error) {
+      console.error("Error deleting task:", error);
+    }
   };
-
   const getAgeing = (task) => {
     if (task.status === "Completed" && task.closure_date && task.entry_date) {
       return differenceInDays(parseISO(task.closure_date), parseISO(task.entry_date));

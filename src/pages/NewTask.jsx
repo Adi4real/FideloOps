@@ -1,10 +1,7 @@
-const db = globalThis.__B44_DB__ || {
-  auth: { isAuthenticated: async () => false, me: async () => null },
-  entities: new Proxy({}, { get: () => ({ filter: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), delete: async () => ({}) }) }),
-  integrations: { Core: { UploadFile: async () => ({ file_url: '' }) } }
-};
+import { db } from "../firebase";
+import { collection, getDocs, addDoc, query, orderBy, limit, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { useState, useEffect, useRef } from "react"; // Ensure useEffect is here
 
-import { useState, useEffect, useRef } from "react";
 
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -68,11 +65,18 @@ export default function NewTask() {
     financial_year: getFinancialYear(),
   });
 
-  useEffect(() => {
-    db.entities.Client.list("client_name", 1000).then(setClients);
-    db.entities.User.list().then(setTeamMembers).catch(() => {});
+useEffect(() => { // Changed from useEffert
+    const fetchInitialData = async () => {
+      try {
+        const teamSnap = await getDocs(collection(db, "users")); 
+        const teamData = teamSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setTeamMembers(teamData);
+      } catch (error) {
+        console.error("Error loading team members:", error);
+      }
+    };
+    fetchInitialData();
   }, []);
-
   useEffect(() => {
     if (clientQuery.length >= 3) {
       const q = clientQuery.toLowerCase();
@@ -100,24 +104,34 @@ export default function NewTask() {
     setShowSuggestions(false);
   };
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    // Get next serial number
-    const allTasks = await db.entities.Task.list("-serial_number", 1);
-    const lastSerial = allTasks[0]?.serial_number || 0;
-    const serial = lastSerial + 1;
-    const fy = getFYShort();
-    const task_id = `FW-${fy}-${String(serial).padStart(4, "0")}`;
+    try {
+      // 1. Get the current count to create a serial number
+      const q = query(collection(db, "tasks"), orderBy("serial_number", "desc"), limit(1));
+      const querySnapshot = await getDocs(q);
+      const lastTask = querySnapshot.docs[0]?.data();
+      
+      const serial = (lastTask?.serial_number || 0) + 1;
+      const fy = getFYShort();
+      const task_id = `FW-${fy}-${String(serial).padStart(4, "0")}`;
 
-    await db.entities.Task.create({
-      ...form,
-      amount: form.amount ? parseFloat(form.amount) : undefined,
-      serial_number: serial,
-      task_id,
-    });
-    setSaved(true);
-    setTimeout(() => navigate(createPageUrl("LiveTasks")), 1200);
+      // 2. Save to Firebase
+      await addDoc(collection(db, "tasks"), {
+        ...form,
+        amount: form.amount ? parseFloat(form.amount) : 0,
+        serial_number: serial,
+        task_id,
+        created_at: new Date()
+      });
+
+      setSaved(true);
+      setTimeout(() => navigate(createPageUrl("LiveTasks")), 1200);
+    } catch (error) {
+      console.error("Error creating task:", error);
+      setSaving(false);
+    }
   };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -245,11 +259,17 @@ export default function NewTask() {
               <Label className="text-xs text-gray-500 mb-1 block">Assigned To *</Label>
               <Select value={form.assigned_to} onValueChange={v => set("assigned_to", v)} required>
                 <SelectTrigger><SelectValue placeholder="Select team member..." /></SelectTrigger>
-                <SelectContent>
-                  {teamMembers.map(m => (
-                    <SelectItem key={m.id} value={m.full_name || m.email}>{m.full_name || m.email}</SelectItem>
-                  ))}
-                </SelectContent>
+<SelectContent>
+  {teamMembers.length === 0 ? (
+    <SelectItem value="loading" disabled>Loading team...</SelectItem>
+  ) : (
+    teamMembers.map(m => (
+      <SelectItem key={m.id} value={m.full_name || "Unknown"}>
+        {m.full_name || m.email}
+      </SelectItem>
+    ))
+  )}
+</SelectContent>
               </Select>
             </div>
             <div>
