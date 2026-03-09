@@ -1,0 +1,35 @@
+{
+  "name": "Client",
+  "type": "object",
+  "properties": {
+    "client_code": {
+      "type": "string",
+      "description": "Unique client code"
+    },
+    "client_name": {
+      "type": "string"
+    },
+    "rm_assigned": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "pan": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "client_code",
+    "client_name"
+  ]
+}
