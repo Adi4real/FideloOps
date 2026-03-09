@@ -6,18 +6,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 export default function ClientForm({ client, onSave, onClose }) {
+  // Initialize form with existing client data or empty fields
   const [form, setForm] = useState(client || {
     client_code: "",
     client_name: "",
     rm_assigned: "",
     branch: "",
-    phone: "",
-    email: "",
-    pan: "",
     notes: "",
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Added a proper submit handler to prevent page reloads
+  const handleSubmit = (e) => {
+    e.preventDefault(); // Prevents the browser from refreshing the page
+    if (!form.client_code || !form.client_name) {
+      alert("Please fill in the required fields.");
+      return;
+    }
+    onSave(form);
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -25,38 +33,44 @@ export default function ClientForm({ client, onSave, onClose }) {
         <h3 className="font-semibold text-gray-800">{client ? "Edit Client" : "Add New Client"}</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[
-          { key: "client_code", label: "Client Code *", req: true, readOnly: !!client },
-          { key: "client_name", label: "Client Name *", req: true },
-          { key: "rm_assigned", label: "RM Assigned" },
-          { key: "branch", label: "Branch" },
-          { key: "phone", label: "Phone" },
-          { key: "email", label: "Email" },
-          { key: "pan", label: "PAN" },
-        ].map(({ key, label, req, readOnly }) => (
-          <div key={key}>
-            <Label className="text-xs text-gray-500 mb-1 block">{label}</Label>
+
+      <form onSubmit={handleSubmit}> {/* Wrapped in a form tag for better UX */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-gray-500 mb-1 block">Client Code *</Label>
             <Input
-              value={form[key] || ""}
-              onChange={e => set(key, e.target.value)}
-              required={req}
-              readOnly={readOnly}
-              className={readOnly ? "bg-gray-50 text-gray-500" : ""}
+              value={form.client_code || ""}
+              onChange={e => set("client_code", e.target.value)}
+              required
+              readOnly={!!client} // Prevents changing the code once created
+              className={client ? "bg-gray-50 text-gray-500" : ""}
             />
           </div>
-        ))}
-        <div className="sm:col-span-2">
-          <Label className="text-xs text-gray-500 mb-1 block">Notes</Label>
-          <Textarea rows={2} value={form.notes || ""} onChange={e => set("notes", e.target.value)} />
+          <div>
+            <Label className="text-xs text-gray-500 mb-1 block">Client Name *</Label>
+            <Input value={form.client_name || ""} onChange={e => set("client_name", e.target.value)} required />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-500 mb-1 block">RM Assigned</Label>
+            <Input value={form.rm_assigned || ""} onChange={e => set("rm_assigned", e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-500 mb-1 block">Branch</Label>
+            <Input value={form.branch || ""} onChange={e => set("branch", e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs text-gray-500 mb-1 block">Notes</Label>
+            <Textarea rows={2} value={form.notes || ""} onChange={e => set("notes", e.target.value)} />
+          </div>
         </div>
-      </div>
-      <div className="flex justify-end gap-3 mt-4">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={() => onSave(form)} className="bg-[#1E3A5F] hover:bg-[#16304f] text-white rounded-xl">
-          {client ? "Save Changes" : "Add Client"}
-        </Button>
-      </div>
+        
+        <div className="flex justify-end gap-3 mt-4">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" className="bg-[#00765B] hover:bg-[#005c46] text-white rounded-xl">
+            {client ? "Save Changes" : "Add Client"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

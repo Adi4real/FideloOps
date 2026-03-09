@@ -61,16 +61,29 @@ const handleDelete = async (client) => {
     }
   };
   const handleSave = async (data) => {
-    if (data.id) {
-      await db.entities.Client.update(data.id, data);
-    } else {
-      // Check for duplicate code
-      const existing = clients.find(c => c.client_code === data.client_code);
-      if (existing) { alert("Client code already exists!"); return; }
-      await db.entities.Client.create(data);
+    try {
+      if (data.id) {
+        // Update existing client
+        const clientRef = doc(db, "clients", data.id);
+        await updateDoc(clientRef, data);
+      } else {
+        // Create new client
+        // First check for duplicate code locally
+        const existing = clients.find(c => c.client_code === data.client_code);
+        if (existing) { 
+          alert("Client code already exists!"); 
+          return; 
+        }
+        await addDoc(collection(db, "clients"), {
+          ...data,
+          created_at: new Date()
+        });
+      }
+      setShowForm(false);
+      load(); // Reload the client list from Firebase
+    } catch (error) {
+      console.error("Error saving client:", error);
     }
-    setShowForm(false);
-    load();
   };
 
   return (

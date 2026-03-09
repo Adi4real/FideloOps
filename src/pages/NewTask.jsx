@@ -65,18 +65,22 @@ export default function NewTask() {
     financial_year: getFinancialYear(),
   });
 
-useEffect(() => { // Changed from useEffert
+useEffect(() => {
     const fetchInitialData = async () => {
-      try {
-        const teamSnap = await getDocs(collection(db, "users")); 
-        const teamData = teamSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTeamMembers(teamData);
-      } catch (error) {
-        console.error("Error loading team members:", error);
-      }
+        try {
+            // Fetch Clients and Team Members from Firebase
+            const [clientSnap, teamSnap] = await Promise.all([
+                getDocs(collection(db, "clients")),
+                getDocs(collection(db, "users"))
+            ]);
+            setClients(clientSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setTeamMembers(teamSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error("Error loading data:", error);
+        }
     };
     fetchInitialData();
-  }, []);
+}, []);
   useEffect(() => {
     if (clientQuery.length >= 3) {
       const q = clientQuery.toLowerCase();
