@@ -1,7 +1,6 @@
 import { db } from "../firebase";
-import { collection, getDocs, addDoc, query, orderBy, limit, doc, deleteDoc, updateDoc } from "firebase/firestore";
-import { useState, useEffect, useRef } from "react"; // Ensure useEffect is here
-
+import { collection, getDocs, addDoc, query, orderBy, limit } from "firebase/firestore";
+import { useState, useEffect, useRef } from "react";
 
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -13,16 +12,51 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const CATEGORIES = ["Transaction", "Service", "Compliance", "Investment"];
+// 1. Define the dynamic Mapping
+const CATEGORY_ACTION_MAP = {
+  "Transaction": [
+    "SIP Registration", "SIP Modification", "SIP Cancellation / Pause", 
+    "Lumpsum Purchase", "Additional Purchase", "Redemption", "Switch", 
+    "STP Registration", "STP Cancellation", "SWP Registration", 
+    "SWP Modification", "SWP Cancellation", "SIP Date Change", 
+    "Mandate Registration", "Mandate Update", "Mandate Cancellation", 
+    "Folio Creation", "Nominee Addition / Update", "Bank Change Request", "FATCA Update"
+  ],
+  "Financial Planning": [
+    "Financial Goal Discussion", "Risk Profiling", "Portfolio Review", 
+    "Asset Allocation Planning", "Investment Proposal Preparation", 
+    "Goal Planning (Education / Retirement etc.)", "SIP Planning", 
+    "Retirement Planning", "Child Education Planning", 
+    "Wealth Creation Planning", "Portfolio Rebalancing", 
+    "Investment Strategy Discussion", "Financial Plan Presentation"
+  ],
+  "Compliance": [
+    "KYC Registration", "KYC Modification", "CKYC Update", "IPV Verification", 
+    "FATCA Compliance", "Nominee Compliance Update", "KYC Reverification", 
+    "PAN Update", "Address Update", "Mobile / Email Update", "FATCA Re-declaration"
+  ],
+  "Insurance": [
+    "Insurance Need Analysis", "Term Insurance Discussion", 
+    "Health Insurance Discussion", "Policy Purchase", "Policy Renewal", 
+    "Policy Review", "Claim Assistance", "Insurance Portfolio Review", "Policy Servicing"
+  ],
+  "Service": [
+    "Account Statement Request", "Capital Gain Statement", "SIP Status Check", 
+    "Transaction Status Check", "Folio Details Correction", "Login Assistance", 
+    "App / Portal Support", "Dividend Payout Clarification", "Redemption Follow-up", 
+    "Mandate Status Follow-up", "AMC Service Follow-up"
+  ],
+  "Business Development": [
+    "New Client Meeting", "Prospect Meeting", "Client Onboarding", 
+    "Investment Awareness Session", "Client Referral Meeting", 
+    "Corporate Presentation", "Lead Follow-up", "Partnership Meeting", 
+    "Distributor Meeting", "Marketing Activity", "Webinar / Seminar"
+  ]
+};
+
+const CATEGORIES = Object.keys(CATEGORY_ACTION_MAP);
 const CHANNELS = ["Call", "WhatsApp", "Email", "Meeting"];
 const PRIORITIES = ["High", "Medium", "Low"];
-const ACTIONS = [
-  "SIP Registration", "SIP Modification", "SIP Cancellation",
-  "Redemption", "Portfolio Review", "Insurance Renewal",
-  "NFO Application", "Lump Sum Purchase", "Switch",
-  "KYC Update", "Nomination Update", "Bank Mandate",
-  "Account Statement", "Capital Gains Statement", "Other"
-];
 
 function getFinancialYear() {
   const now = new Date();
@@ -52,7 +86,7 @@ export default function NewTask() {
     client_code: "",
     rm_assigned: "",
     branch: "",
-    category: "Service",
+    category: "",
     action: "",
     product_name: "",
     notes: "",
@@ -65,22 +99,24 @@ export default function NewTask() {
     financial_year: getFinancialYear(),
   });
 
-useEffect(() => {
+  // 2. Fetch Initial Data (Combined Hook)
+  useEffect(() => {
     const fetchInitialData = async () => {
-        try {
-            // Fetch Clients and Team Members from Firebase
-            const [clientSnap, teamSnap] = await Promise.all([
-                getDocs(collection(db, "clients")),
-                getDocs(collection(db, "users"))
-            ]);
-            setClients(clientSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setTeamMembers(teamSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        } catch (error) {
-            console.error("Error loading data:", error);
-        }
+      try {
+        const [clientSnap, teamSnap] = await Promise.all([
+          getDocs(collection(db, "clients")),
+          getDocs(collection(db, "users"))
+        ]);
+        setClients(clientSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setTeamMembers(teamSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
     };
     fetchInitialData();
-}, []);
+  }, []);
+
+  // 3. Client Search Logic
   useEffect(() => {
     if (clientQuery.length >= 3) {
       const q = clientQuery.toLowerCase();
@@ -96,6 +132,17 @@ useEffect(() => {
     }
   }, [clientQuery, clients]);
 
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // 4. Handle Category Change (Resets Action)
+  const handleCategoryChange = (val) => {
+    setForm(f => ({
+      ...f,
+      category: val,
+      action: "" 
+    }));
+  };
+
   const selectClient = (c) => {
     setClientQuery(c.client_name);
     setForm(f => ({
@@ -108,11 +155,10 @@ useEffect(() => {
     setShowSuggestions(false);
   };
 
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      // 1. Get the current count to create a serial number
       const q = query(collection(db, "tasks"), orderBy("serial_number", "desc"), limit(1));
       const querySnapshot = await getDocs(q);
       const lastTask = querySnapshot.docs[0]?.data();
@@ -121,7 +167,6 @@ const handleSubmit = async (e) => {
       const fy = getFYShort();
       const task_id = `FW-${fy}-${String(serial).padStart(4, "0")}`;
 
-      // 2. Save to Firebase
       await addDoc(collection(db, "tasks"), {
         ...form,
         amount: form.amount ? parseFloat(form.amount) : 0,
@@ -137,8 +182,6 @@ const handleSubmit = async (e) => {
       setSaving(false);
     }
   };
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   if (saved) {
     return (
@@ -160,12 +203,10 @@ const handleSubmit = async (e) => {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
-
         {/* Section: Client Info */}
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Client Information</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Client search */}
             <div className="relative sm:col-span-2" ref={suggestRef}>
               <Label className="text-xs text-gray-500 mb-1 block">Client Name *</Label>
               <div className="relative">
@@ -195,7 +236,6 @@ const handleSubmit = async (e) => {
                 </div>
               )}
             </div>
-
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Client Code</Label>
               <Input value={form.client_code} readOnly className="bg-gray-50 text-gray-500" placeholder="Auto-filled" />
@@ -215,22 +255,35 @@ const handleSubmit = async (e) => {
           </div>
         </div>
 
-        {/* Section: Task Details */}
+        {/* Section: Task Details (Dependent Dropdowns) */}
         <div>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Task Details</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Category *</Label>
-              <Select value={form.category} onValueChange={v => set("category", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <Select value={form.category} onValueChange={handleCategoryChange} required>
+                <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">Action *</Label>
-              <Select value={form.action} onValueChange={v => set("action", v)} required>
-                <SelectTrigger><SelectValue placeholder="Select action..." /></SelectTrigger>
-                <SelectContent>{ACTIONS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+              <Select 
+                value={form.action} 
+                onValueChange={v => set("action", v)} 
+                required 
+                disabled={!form.category}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={form.category ? "Select action..." : "Pick a category first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(CATEGORY_ACTION_MAP[form.category] || []).map(a => (
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
             <div>
@@ -263,17 +316,17 @@ const handleSubmit = async (e) => {
               <Label className="text-xs text-gray-500 mb-1 block">Assigned To *</Label>
               <Select value={form.assigned_to} onValueChange={v => set("assigned_to", v)} required>
                 <SelectTrigger><SelectValue placeholder="Select team member..." /></SelectTrigger>
-<SelectContent>
-  {teamMembers.length === 0 ? (
-    <SelectItem value="loading" disabled>Loading team...</SelectItem>
-  ) : (
-    teamMembers.map(m => (
-      <SelectItem key={m.id} value={m.full_name || "Unknown"}>
-        {m.full_name || m.email}
-      </SelectItem>
-    ))
-  )}
-</SelectContent>
+                <SelectContent>
+                  {teamMembers.length === 0 ? (
+                    <SelectItem value="loading" disabled>No members found</SelectItem>
+                  ) : (
+                    teamMembers.map(m => (
+                      <SelectItem key={m.id} value={m.full_name || "Unknown"}>
+                        {m.full_name || m.email}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
               </Select>
             </div>
             <div>
