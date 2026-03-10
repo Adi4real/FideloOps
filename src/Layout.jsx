@@ -1,18 +1,14 @@
-const db = globalThis.__B44_DB__ || {
-  auth: { isAuthenticated: async () => false, me: async () => null },
-  entities: new Proxy({}, { get: () => ({ filter: async () => [], get: async () => null, create: async () => ({}), update: async () => ({}), delete: async () => ({}) }) }),
-  integrations: { Core: { UploadFile: async () => ({ file_url: '' }) } }
-};
-
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-
 import {
   LayoutDashboard, Plus, Users, ListChecks, BarChart3,
-  Menu, X, Bell, ChevronDown, LogOut, Settings
+  Menu, X, Bell, ChevronDown, LogOut, Settings, ArrowLeft, Home
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Real Firebase import
+import { db } from "./firebase"; 
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, page: "Dashboard" },
@@ -24,11 +20,12 @@ const navItems = [
 
 export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // FideloWealth brand colors: Dark Green #00765B, Light Green #51AE3A
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    db.auth.me().then(setUser).catch(() => {});
+    // Standard placeholder until Firebase Auth is fully implemented
+    setUser({ full_name: "Admin", role: "Manager" });
   }, []);
 
   return (
@@ -51,7 +48,7 @@ export default function Layout({ children, currentPageName }) {
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
         "lg:translate-x-0 lg:static lg:flex"
       )}>
-        {/* Logo */}
+        {/* Logo Section */}
         <div className="px-6 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#51AE3A] flex items-center justify-center">
@@ -64,8 +61,24 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        {/* Navigation Buttons Area */}
+        <div className="px-3 pt-4 pb-2 space-y-2">
+          {/* Go Back to Main Site */}
+          <button 
+            onClick={() => {
+              window.location.href = "https://adi4real.github.io/Fidelo_Main/";
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/60 hover:text-white hover:bg-white/10 transition-all border border-white/5"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Go Back
+          </button>
+</div>
+        {/* Main App Navigation */}
+        <nav className="flex-1 px-3 py-2 space-y-1">
+          <div className="px-3 py-2 text-[10px] font-bold text-white/30 uppercase tracking-widest">
+            Main Menu
+          </div>
           {navItems.map(({ label, icon: Icon, page }) => {
             const active = currentPageName === page;
             return (
@@ -87,20 +100,20 @@ export default function Layout({ children, currentPageName }) {
           })}
         </nav>
 
-        {/* User */}
+        {/* User Profile Section */}
         {user && (
           <div className="px-4 py-4 border-t border-white/10">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-[#51AE3A]/30 flex items-center justify-center">
                 <span className="text-[#51AE3A] text-xs font-bold">
-                  {user.full_name?.[0] || user.email?.[0] || "U"}
+                  {user.full_name?.[0] || "A"}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white text-xs font-medium truncate">{user.full_name || user.email}</p>
-                <p className="text-white/40 text-xs capitalize">{user.role || "user"}</p>
+                <p className="text-white text-xs font-medium truncate">{user.full_name}</p>
+                <p className="text-white/40 text-xs capitalize">{user.role}</p>
               </div>
-              <button onClick={() => db.auth.logout()} className="text-white/40 hover:text-white">
+              <button className="text-white/40 hover:text-white">
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
@@ -108,14 +121,13 @@ export default function Layout({ children, currentPageName }) {
         )}
       </aside>
 
-      {/* Overlay */}
+      {/* Mobile Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Main */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
         <header className="h-14 bg-white border-b border-gray-100 flex items-center px-4 gap-4 sticky top-0 z-30">
           <button
             className="lg:hidden text-gray-500 hover:text-gray-700"
@@ -132,7 +144,6 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 overflow-auto">
           {children}
         </main>
